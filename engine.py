@@ -70,7 +70,7 @@ class GreekTextParser:
                 'i': 'indicative', 's': 'subjunctive', 'o': 'optative', 'n': 'infinitive',
                 'm': 'imperative', 'd': 'gerund', 'g': 'gerundive'
             },
-            'voice': {'a': 'active', 'p': 'passive', 'm': 'middle', 'e': 'middle-passive'},
+            'voice': {'a': 'active', 'p': 'passive', 'm': 'middle', 'e': 'mediopassive'},
             'gender': {'m': 'masculine', 'f': 'feminine', 'n': 'neuter'},
             'case': {
                 'n': 'nominative', 'g': 'genitive', 'd': 'dative', 'a': 'accusative',
@@ -174,32 +174,39 @@ class GreekQueryEngine:
             self.return_parent = False
 
         if '&' in selector:
-            # how to use &
-            # lets say you want to just look for sentences that contain THING 1 and THING 2. 
-            # THING 1 & THING 2 give you results but just for every sentence with THING 1 and THING 2.
-            results = []
-            for sub_selector in selector.split('&'):
-                instance = [[str(i.urn)+" "+str(i.sentence_id), i] for i in self.query(sub_selector.strip())]
-                results.append(instance)
-
-            if len(results[0]) <= len(results[1]):
-                shorter_results = results[0]
-                longer_results = results[1]
-            else:
-                shorter_results = results[1]
-                longer_results = results[0]
-
-            longer_results_tags = [thing[0] for thing in longer_results]
-            overlap = [s[0] for s in shorter_results if s[0] in longer_results_tags]
-            final_results = [s[1] for s in shorter_results if s[0] in overlap]
-            final_results.extend([s[1] for s in longer_results if s[0] in overlap])
-
+            # Find sentences that contain ALL conditions
+            sub_selectors = [s.strip() for s in selector.split('&')]
+            
+            # Query each sub-selector and group results by sentence
+            sentence_results = {}  # {sentence_id: {selector_idx: [words]}}
+            
+            for idx, sub_selector in enumerate(sub_selectors):
+                for word in self.query(sub_selector):
+                    sentence_key = (str(word.urn), word.sentence_id)
+                    
+                    if sentence_key not in sentence_results:
+                        sentence_results[sentence_key] = {}
+                    if idx not in sentence_results[sentence_key]:
+                        sentence_results[sentence_key][idx] = []
+                        
+                    sentence_results[sentence_key][idx].append(word)
+            
+            # Return words from sentences that matched ALL sub-selectors
+            num_selectors = len(sub_selectors)
+            final_results = []
+            
+            for sentence_key, selector_matches in sentence_results.items():
+                if len(selector_matches) == num_selectors:  # All conditions met
+                    # Add all words from this sentence that matched any condition
+                    for words_list in selector_matches.values():
+                        final_results.extend(words_list)
+            
             return final_results
+        
         if ',' in selector:
             results = []
             for sub_selector in selector.split(','):
                 instance = [(str(i.urn)+str(i.id), i) for i in self.query(sub_selector.strip())]
-                #print("instance contains ",len(instance)," members")
                 results.extend([i for i in instance if i[0] not in [r[0] for r in results]])
             return [r[1] for r in results]  # Remove duplicates
         # Handle parent-child relationships (>)
@@ -379,4 +386,5 @@ def create_query_engine(xml_docs: dict[str, str]) -> GreekQueryEngine:
     for urn, content in xml_docs.items():
         words = parser.xml_to_words(content, urn)
         all_words.extend(words)
+    print("successfully loaded items, creating engine")
     return GreekQueryEngine(all_words)
