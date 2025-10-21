@@ -3,6 +3,9 @@ import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
+from tqdm import tqdm
+
+snt_count = 0
 
 class PartOfSpeech(Enum):
     NOUN = "noun"
@@ -98,6 +101,7 @@ class GreekTextParser:
         return features
     
     def xml_to_words(self, xml_content: str, doc_urn: str) -> List[Word]:
+        #print("eyy im parsin here")
         """Convert Perseus Treebank XML to Word objects."""
         root = ET.fromstring(xml_content)
         words = []
@@ -131,15 +135,17 @@ class GreekTextParser:
                     subdoc=subdoc,
                     **features
                 )
-                
+                #print(word_id, urn)
                 words.append(word)
         
         return words
 
 class GreekQueryEngine:
     """Query engine for searching Greek texts using CSS-like selectors."""
-    
+    return_parent = False
+
     def __init__(self, words: List[Word]):
+        print("hewwo")
         self.words = words
         self.words_by_id = {word.id: word for word in words}
         self.words_by_sentence = {}
@@ -150,6 +156,8 @@ class GreekQueryEngine:
                 self.words_by_sentence[word.sentence_id] = []
             self.words_by_sentence[word.sentence_id].append(word)
         
+        print(len(self.words_by_sentence))
+
         # Build parent-child relationships
         for word in words:
             if word.parent_id in self.words_by_id:
@@ -159,24 +167,54 @@ class GreekQueryEngine:
     def query(self, selector: str) -> List[Word]:
         """Execute a query using CSS-like selector syntax."""
         # Handle comma-separated selectors
+        print(selector)
+
+        # put this at the start of your query! could I make this a switch? yeah just didn't feel like it
+        if 'returnParent' in selector:
+            self.return_parent = True
+            selector.replace('returnParent', '')
+        else:
+            self.return_parent = False
+
+        if '&' in selector:
+            # how to use &
+            # lets say you want to just look for sentences that contain THING 1 and THING 2. 
+            # THING 1 & THING 2 give you results but just for every sentence with THING 1 and THING 2.
+            # multiple & support will only happen if i really desperately need it but lets hope not 
+            results = []
+            for sub_selector in selector.split('&'):
+                instance = [[str(i.urn)+" "+str(i.sentence_id), i] for i in self.query(sub_selector.strip())]
+                results.append(instance)
+
+            if len(results[0]) <= len(results[1]):
+                shorter_results = results[0]
+                longer_results = results[1]
+            else:
+                shorter_results = results[1]
+                longer_results = results[0]
+
+            longer_results_tags = [thing[0] for thing in longer_results]
+            overlap = [s[0] for s in shorter_results if s[0] in longer_results_tags]
+            final_results = [s[1] for s in shorter_results if s[0] in overlap]
+            final_results.extend([s[1] for s in longer_results if s[0] in overlap])
+
+            return final_results
         if ',' in selector:
             results = []
             for sub_selector in selector.split(','):
-                results.extend(self.query(sub_selector.strip()))
-            return list(set(results))  # Remove duplicates
-        
+                instance = [(str(i.urn)+str(i.id), i) for i in self.query(sub_selector.strip())]
+                print("instance contains ",len(instance)," members")
+                results.extend([i for i in instance if i[0] not in [r[0] for r in results]])
+            return [r[1] for r in results]  # Remove duplicates
         # Handle parent-child relationships (>)
         if ' > ' in selector:
             return self._handle_parent_child(selector)
-        
         # Handle adjacent words (+)
         if ' + ' in selector:
             return self._handle_adjacent(selector)
-        
         # Handle word order (~)
         if ' ~ ' in selector:
             return self._handle_word_order(selector)
-        
         # Handle single selector
         return self._match_single_selector(selector)
     
@@ -206,6 +244,12 @@ class GreekQueryEngine:
                 return False
             selector = selector.replace(':root', '')
         
+        # do not search alone! search with something more descriptive that points to it!
+        # :neighbor + γάρ is a good way to pull up postpositives, for instance
+        if ':neighbor' in selector:
+            return True
+            #selector = selector.replace(':neighbor', '')
+
         # Handle :before() and :after() pseudo-selectors
         before_match = re.search(r':before\(([^)]+)\)', selector)
         if before_match:
@@ -257,12 +301,17 @@ class GreekQueryEngine:
         
         parent_selector, child_selector = parts
         parent_words = self._match_single_selector(parent_selector.strip())
+        #print(parent_selector, child_selector)
         
         results = []
         for parent in parent_words:
+            parent_value = 0
             for child in parent.children:
                 if self._word_matches_selector(child, child_selector.strip()):
                     results.append(child)
+                    if parent_value == 0 and self.return_parent == True:
+                        results.append(parent)
+                        parent_value = 1
         
         return results
     
@@ -329,8 +378,10 @@ class GreekQueryEngine:
         return False
 
 def create_query_engine(xml_docs: dict[str, str]) -> GreekQueryEngine:
+    #print("inside this function.")
     parser = GreekTextParser()
     all_words = []
+    print("loading ", len(xml_docs.items()), " items...")
     for urn, content in xml_docs.items():
         words = parser.xml_to_words(content, urn)
         all_words.extend(words)
