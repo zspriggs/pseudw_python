@@ -3,7 +3,6 @@ import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
-from tqdm import tqdm
 
 snt_count = 0
 
@@ -101,7 +100,6 @@ class GreekTextParser:
         return features
     
     def xml_to_words(self, xml_content: str, doc_urn: str) -> List[Word]:
-        #print("eyy im parsin here")
         """Convert Perseus Treebank XML to Word objects."""
         root = ET.fromstring(xml_content)
         words = []
@@ -145,7 +143,6 @@ class GreekQueryEngine:
     return_parent = False
 
     def __init__(self, words: List[Word]):
-        print("hewwo")
         self.words = words
         self.words_by_id = {word.id: word for word in words}
         self.words_by_sentence = {}
@@ -180,7 +177,6 @@ class GreekQueryEngine:
             # how to use &
             # lets say you want to just look for sentences that contain THING 1 and THING 2. 
             # THING 1 & THING 2 give you results but just for every sentence with THING 1 and THING 2.
-            # multiple & support will only happen if i really desperately need it but lets hope not 
             results = []
             for sub_selector in selector.split('&'):
                 instance = [[str(i.urn)+" "+str(i.sentence_id), i] for i in self.query(sub_selector.strip())]
@@ -203,7 +199,7 @@ class GreekQueryEngine:
             results = []
             for sub_selector in selector.split(','):
                 instance = [(str(i.urn)+str(i.id), i) for i in self.query(sub_selector.strip())]
-                print("instance contains ",len(instance)," members")
+                #print("instance contains ",len(instance)," members")
                 results.extend([i for i in instance if i[0] not in [r[0] for r in results]])
             return [r[1] for r in results]  # Remove duplicates
         # Handle parent-child relationships (>)
@@ -301,7 +297,6 @@ class GreekQueryEngine:
         
         parent_selector, child_selector = parts
         parent_words = self._match_single_selector(parent_selector.strip())
-        #print(parent_selector, child_selector)
         
         results = []
         for parent in parent_words:
@@ -378,7 +373,6 @@ class GreekQueryEngine:
         return False
 
 def create_query_engine(xml_docs: dict[str, str]) -> GreekQueryEngine:
-    #print("inside this function.")
     parser = GreekTextParser()
     all_words = []
     print("loading ", len(xml_docs.items()), " items...")
