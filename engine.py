@@ -3,8 +3,7 @@ import xml.etree.ElementTree as ET
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
-
-snt_count = 0
+import os
 
 class PartOfSpeech(Enum):
     NOUN = "noun"
@@ -140,7 +139,9 @@ class GreekTextParser:
 
 class GreekQueryEngine:
     """Query engine for searching Greek texts using CSS-like selectors."""
+    
     return_parent = False
+    #max_docs = 5
 
     def __init__(self, words: List[Word]):
         self.words = words
@@ -160,13 +161,13 @@ class GreekQueryEngine:
             if word.parent_id in self.words_by_id:
                 parent = self.words_by_id[word.parent_id]
                 parent.children.append(word)
+
     
     def query(self, selector: str) -> List[Word]:
         """Execute a query using CSS-like selector syntax."""
         # Handle comma-separated selectors
         print(selector)
 
-        # put this at the start of your query! could I make this a switch? yeah just didn't feel like it
         if 'returnParent' in selector:
             self.return_parent = True
             selector.replace('returnParent', '')
@@ -382,9 +383,26 @@ class GreekQueryEngine:
 def create_query_engine(xml_docs: dict[str, str]) -> GreekQueryEngine:
     parser = GreekTextParser()
     all_words = []
-    print("loading ", len(xml_docs.items()), " items...")
     for urn, content in xml_docs.items():
         words = parser.xml_to_words(content, urn)
         all_words.extend(words)
     print("successfully loaded items, creating engine")
+
     return GreekQueryEngine(all_words)
+
+def get_engine_from_urns(urns: List[str]):
+    """Create a query engine from a list of URNs"""
+    this_dir = os.path.dirname(__file__)
+    
+    all_files = {}
+    
+    for urn in urns:
+        doc_path = os.path.join(this_dir, "data", "xml", f"{urn}.xml")
+        try:
+            with open(doc_path, 'rb') as doc:
+                xml_content = doc.read().decode('utf-8')
+                all_files[urn] = xml_content
+        except: 
+            print(f"Error opening document with urn {urn}.")  
+
+    return create_query_engine(all_files)

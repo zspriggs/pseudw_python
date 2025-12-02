@@ -4,6 +4,7 @@ from typing import List
 import os
 
 from engine import create_query_engine
+from memory_engine import MemoryHelper
 
 def format_word_results(words: List) -> pd.DataFrame:
     """Format query results into a DataFrame for display."""
@@ -66,29 +67,10 @@ def create_genre_options():
         'Religious Poetry', 'Theology', 'Engineering', 'Rhetoric',
         'Commentary'
     ]
-    
-def create_engine_from_files(urns: List[str]):
-    """Create a query engine from a list of URNs"""
-    this_dir = os.path.dirname(__file__)
-    
-    all_files = {}
-    
-    with st.spinner("Loading XML data..."):
-        #print(urns) 
-        for urn in urns:
-            doc_path = os.path.join(this_dir, "data", "xml", f"{urn}.xml")
-            try:
-                with open(doc_path, 'rb') as doc: # < this is the misbehaving line
-                    xml_content = doc.read().decode('utf-8')
-                    all_files[urn] = xml_content
-            except: 
-                st.error(f"Error opening document with urn {urn}.")  # this doesnt really do exactly what we expected it to    
-    st.info("Ready to execute queries.")
-    return create_query_engine(all_files)
 
 @st.cache_resource    
 def get_query_engine(urns):
-    return create_engine_from_files(urns)
+    return MemoryHelper(urns, 5)
 
 def main():
     st.set_page_config(
@@ -166,13 +148,22 @@ def main():
             else:
                 try:
                     print("attempting to execute query")
-                    with st.spinner("Executing query..."):
-                        query_engine = get_query_engine(st.session_state.selected_urns)
-                        print("query engine fetched/created")
-                        results = query_engine.query(query)
-                    
-                    st.session_state.current_results = results
+                    progress = st.progress(0, text="Querying document(s)...")
+                    all_results = []
+
+                    query_engine = get_query_engine(st.session_state.selected_urns)
+
+                    for pct, batch in query_engine.query(query):
+                        if pct > 1: 
+                            pct = 1
+                        progress.progress(pct, text="Querying document(s)...")
+                        all_results.extend(batch)
+
+                    progress.progress(100)
+
+                    st.session_state.current_results = all_results
                     st.session_state.current_query = query
+                
                 except Exception as e:
                     st.error(f"Error executing query: {str(e)}")
                     st.info("Please check your query syntax and try again.")
@@ -299,9 +290,9 @@ def main():
     with tab3:
         st.info("Development in progress.")
 
-def alternative_main():
-    print("bonjour")
-    create_engine_from_files(all_urns)
+# def alternative_main():
+#     print("bonjour")
+#     create_engine_from_files(all_urns)
 
 if __name__ == "__main__":
     main()
