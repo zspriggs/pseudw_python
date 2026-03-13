@@ -67,7 +67,7 @@ class GreekTextParser:
             },
             'mood': {
                 'i': 'indicative', 's': 'subjunctive', 'o': 'optative', 'n': 'infinitive',
-                'm': 'imperative', 'd': 'gerund', 'g': 'gerundive'
+                'm': 'imperative', 'd': 'gerund', 'g': 'gerundive', 'p': 'participle'
             },
             'voice': {'a': 'active', 'p': 'passive', 'm': 'middle', 'e': 'mediopassive'},
             'gender': {'m': 'masculine', 'f': 'feminine', 'n': 'neuter'},
